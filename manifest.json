@@ -1,0 +1,12 @@
+{
+    "display_name": "Persistent Local Storage",
+    "loading_order": -99999,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Enerccio",
+    "version": "1.0.0",
+    "homePage": "https://github.com/Enerccio/SillyTavern-PersistentItemizedPrompts",
+    "auto_update": true
+}
