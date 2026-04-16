@@ -97,18 +97,18 @@ async function save_chat(chat_id) {
     }
 }
 
-async function delete_chat(chat_id) {
-    await fetch('/api/plugins/persistentitemizedprompts/delete?chatId=' + encodeURIComponent(chat_id), {
-        method: 'GET',
-        headers: getRequestHeaders()
-    });
-}
-
-async function delete_all() {
-    await fetch('/api/plugins/persistentitemizedprompts/deleteAll' + encodeURIComponent(chat_id), {
-        method: 'GET',
-        headers: getRequestHeaders()
-    });
+async function delete_chat(chat_id, all) {
+    if (all) {
+        await fetch('/api/plugins/persistentitemizedprompts/deleteAll' + encodeURIComponent(chat_id), {
+            method: 'GET',
+            headers: getRequestHeaders()
+        });
+    } else {
+        await fetch('/api/plugins/persistentitemizedprompts/delete?chatId=' + encodeURIComponent(chat_id), {
+            method: 'GET',
+            headers: getRequestHeaders()
+        });
+    }
 }
 
 async function synchronize() {
@@ -138,6 +138,5 @@ jQuery(async function () {
     const context = SillyTavern.getContext();
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_LOADED, async ({chatId}) => await load_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_SAVED, async ({chatId}) => await save_chat(chatId));
-    context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED, async ({chatId}) => delete_chat(chatId));
-    context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED_ALL, async () => delete_all());
+    context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED, async ({chatId, all}) => await delete_chat(chatId, all));
 });
