@@ -131,6 +131,12 @@ async function initialize_persistent_storage() {
     }
 }
 
+async function message_appended() {
+    const ctx = SillyTavern.getContext();
+    if (ctx.chat_id)
+        await save_chat(ctx.chat_id);
+}
+
 // noinspection JSUnresolvedReference
 jQuery(async function () {
     await initialize_persistent_storage();
@@ -139,4 +145,5 @@ jQuery(async function () {
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_LOADED, async ({chatId}) => await load_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_SAVED, async ({chatId}) => await save_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED, async ({chatId, all}) => await delete_chat(chatId, all));
+    context.eventSource.on(event_types.USER_MESSAGE_RENDERED, async () => await message_appended());
 });
