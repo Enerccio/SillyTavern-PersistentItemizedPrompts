@@ -30,7 +30,7 @@ async function loadChat(chat_id) {
         });
         const messages = await res.json();
         messages.forEach((message) => {
-            prompts[message.id] = message.prompt;
+            prompts[Number(message.id)] = message.prompt;
         })
     }
     return prompts;
@@ -42,13 +42,13 @@ async function bulkPersist(chat_id, prompts, max= BULK_SIZE) {
         const prompt = prompts[i];
         if (prompt) {
             bulkops.push({
-                messageId: i,
+                messageId: i.toString(),
                 op: 'persist',
                 data: prompt
             });
         } else {
             bulkops.push({
-                messageId: i,
+                messageId: i.toString(),
                 op: 'delete',
             })
         }
@@ -131,7 +131,7 @@ async function initialize_persistent_storage() {
     }
 }
 
-async function message_appended() {
+async function trigger_save() {
     const ctx = SillyTavern.getContext();
     if (ctx.chat_id)
         await save_chat(ctx.chat_id);
@@ -145,5 +145,7 @@ jQuery(async function () {
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_LOADED, async ({chatId}) => await load_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_SAVED, async ({chatId}) => await save_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED, async ({chatId, all}) => await delete_chat(chatId, all));
-    context.eventSource.on(event_types.USER_MESSAGE_RENDERED, async () => await message_appended());
+    context.eventSource.on(event_types.USER_MESSAGE_RENDERED, async () => await trigger_save());
+    context.eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, async () => await trigger_save());
+    context.eventSource.on(event_types.MESSAGE_DELETED, async () => await trigger_save());
 });
