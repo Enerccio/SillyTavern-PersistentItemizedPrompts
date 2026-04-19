@@ -1,4 +1,6 @@
-import { itemizedPrompts } from '../../../itemized-prompts.js';
+// noinspection UnnecessaryLocalVariableJS
+
+import { findItemizedPromptSet, itemizedPrompts } from '../../../itemized-prompts.js';
 import { event_types, getRequestHeaders } from '../../../../script.js';
 import { localforage } from '/lib.js';
 
@@ -14,13 +16,18 @@ async function updateBulk(chat_id, bulkops) {
     });
 }
 
-async function loadChat(chat_id) {
+async function loadChatMessageIds(chat_id) {
     const response  = await fetch('/api/plugins/persistentitemizedprompts/mesIds?chatId=' + encodeURIComponent(chat_id), {
         method: 'GET',
         headers: getRequestHeaders()
     });
-    const prompts = [];
     const result = await response.json();
+    return result;
+}
+
+async function loadChat(chat_id) {
+    const prompts = [];
+    const result = await loadChatMessageIds(chat_id);
     for (let i = 0; i < result.length; i += BULK_SIZE) {
         const chunk = result.slice(i, i + BULK_SIZE);
         const res  = await fetch('/api/plugins/persistentitemizedprompts/prompts?chatId=' + encodeURIComponent(chat_id), {
@@ -30,7 +37,7 @@ async function loadChat(chat_id) {
         });
         const messages = await res.json();
         messages.forEach((message) => {
-            prompts[Number(message.id)] = message.prompt;
+            prompts.push(message.prompt);
         })
     }
     return prompts;
@@ -42,16 +49,29 @@ async function bulkPersist(chat_id, prompts, max= BULK_SIZE) {
         const prompt = prompts[i];
         if (prompt) {
             bulkops.push({
-                messageId: i.toString(),
+                messageId: prompt.mesId,
                 op: 'persist',
                 data: prompt
             });
-        } else {
-            bulkops.push({
-                messageId: i.toString(),
-                op: 'delete',
-            })
         }
+        if (bulkops.length > max) {
+            await updateBulk(chat_id, bulkops);
+            bulkops = [];
+        }
+    }
+    if (bulkops) {
+        await updateBulk(chat_id, bulkops);
+    }
+}
+
+async function bulkDelete(chat_id, mesIds, max= BULK_SIZE) {
+    let bulkops = [];
+    for (let i=0; i<mesIds.length; i++) {
+        const mesId = mesIds[i];
+        bulkops.push({
+            messageId: mesId,
+            op: 'delete'
+        });
         if (bulkops.length > max) {
             await updateBulk(chat_id, bulkops);
             bulkops = [];
@@ -85,13 +105,40 @@ async function load_chat(chat_id) {
     }
 }
 
-async function save_chat(chat_id) {
+async function save_chat(chat_id, fullResync = false) {
     try {
         if (!chat_id) {
             return;
         }
 
-        await bulkPersist(chat_id, itemizedPrompts);
+        const currentIds = await loadChatMessageIds(chat_id);
+        if (currentIds && currentIds.length > 0 && !fullResync) {
+            const toDelete = new Set(currentIds);
+            const filteredItemizedPrompts = [];
+            for (const prompt of itemizedPrompts) {
+                const mesId = prompt.mesId;
+                let checkId ;
+                checkId = String(Number(mesId)) + '.0'; // fix for double ids
+                if (toDelete.has(checkId)) {
+                    toDelete.delete(checkId);
+                    filteredItemizedPrompts.push(prompt);
+                    continue;
+                }
+
+                checkId = String(mesId);
+                if (toDelete.has(checkId)) {
+                    toDelete.delete(checkId);
+                } else {
+                    // only add new message to the diff
+                    filteredItemizedPrompts.push(prompt);
+                }
+            }
+            await bulkDelete(chat_id, Array.from(toDelete));
+            await bulkPersist(chat_id, filteredItemizedPrompts);
+        } else {
+            // just save whole
+            await bulkPersist(chat_id, itemizedPrompts);
+        }
     } catch {
         console.log('Error saving itemized prompts for chat', chat_id);
     }
@@ -99,7 +146,7 @@ async function save_chat(chat_id) {
 
 async function delete_chat(chat_id, all) {
     if (all) {
-        await fetch('/api/plugins/persistentitemizedprompts/deleteAll' + encodeURIComponent(chat_id), {
+        await fetch('/api/plugins/persistentitemizedprompts/deleteAll', {
             method: 'GET',
             headers: getRequestHeaders()
         });
@@ -131,30 +178,11 @@ async function initialize_persistent_storage() {
     }
 }
 
-async function trigger_save() {
-    const ctx = SillyTavern.getContext();
-    if (ctx.chatId)
-        await save_chat(ctx.chatId);
-}
-
-async function trigger_save_message(ix) {
+async function message_deleted() {
+    // message deleted, we need to resynchronize since it's impossible to know which message was deleted
     const ctx = SillyTavern.getContext();
     if (ctx.chatId) {
-        let bulkops = [];
-        const prompt = itemizedPrompts[ix];
-        if (prompt) {
-            bulkops.push({
-                messageId: ix.toString(),
-                op: 'persist',
-                data: prompt
-            });
-        } else {
-            bulkops.push({
-                messageId: ix.toString(),
-                op: 'delete',
-            })
-        }
-        await updateBulk(ctx.chatId, bulkops);
+        await save_chat(ctx.chatId, true);
     }
 }
 
@@ -166,7 +194,5 @@ jQuery(async function () {
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_LOADED, async ({chatId}) => await load_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_SAVED, async ({chatId}) => await save_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED, async ({chatId, all}) => await delete_chat(chatId, all));
-    context.eventSource.on(event_types.USER_MESSAGE_RENDERED, async (ix) => await trigger_save_message(ix));
-    context.eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, async (ix) => await trigger_save_message(ix));
-    context.eventSource.on(event_types.MESSAGE_DELETED, async (ix) => await trigger_save());
+    context.eventSource.on(event_types.MESSAGE_DELETED, async () => await message_deleted());
 });
