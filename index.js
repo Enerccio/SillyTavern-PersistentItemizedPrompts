@@ -133,13 +133,13 @@ async function initialize_persistent_storage() {
 
 async function trigger_save() {
     const ctx = SillyTavern.getContext();
-    if (ctx.chat.chat_id)
-        await save_chat(ctx.chat.chat_id);
+    if (ctx.chatId)
+        await save_chat(ctx.chatId);
 }
 
 async function trigger_save_message(ix) {
     const ctx = SillyTavern.getContext();
-    if (ctx.chat.chat_id) {
+    if (ctx.chatId) {
         let bulkops = [];
         const prompt = itemizedPrompts[ix];
         bulkops.push({
@@ -147,7 +147,7 @@ async function trigger_save_message(ix) {
             op: 'persist',
             data: prompt
         });
-        await updateBulk(ctx.chat.chat_id, bulkops);
+        await updateBulk(ctx.chatId, bulkops);
     }
 }
 
