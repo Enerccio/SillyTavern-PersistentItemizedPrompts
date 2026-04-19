@@ -137,6 +137,20 @@ async function trigger_save() {
         await save_chat(ctx.chat_id);
 }
 
+async function trigger_save_message(ix) {
+    const ctx = SillyTavern.getContext();
+    if (ctx.chat_id) {
+        let bulkops = [];
+        const prompt = itemizedPrompts[ix];
+        bulkops.push({
+            messageId: ix.toString(),
+            op: 'persist',
+            data: prompt
+        });
+        await updateBulk(ctx.chat_id, bulkops);
+    }
+}
+
 // noinspection JSUnresolvedReference
 jQuery(async function () {
     await initialize_persistent_storage();
@@ -145,7 +159,7 @@ jQuery(async function () {
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_LOADED, async ({chatId}) => await load_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_SAVED, async ({chatId}) => await save_chat(chatId));
     context.eventSource.on(event_types.ITEMIZED_PROMPTS_DELETED, async ({chatId, all}) => await delete_chat(chatId, all));
-    context.eventSource.on(event_types.USER_MESSAGE_RENDERED, async () => await trigger_save());
-    context.eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, async () => await trigger_save());
-    context.eventSource.on(event_types.MESSAGE_DELETED, async () => await trigger_save());
+    context.eventSource.on(event_types.USER_MESSAGE_RENDERED, async (ix) => await trigger_save_message(ix));
+    context.eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, async (ix) => await trigger_save_message(ix));
+    context.eventSource.on(event_types.MESSAGE_DELETED, async (ix) => await trigger_save());
 });
