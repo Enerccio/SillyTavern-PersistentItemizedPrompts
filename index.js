@@ -142,11 +142,18 @@ async function trigger_save_message(ix) {
     if (ctx.chatId) {
         let bulkops = [];
         const prompt = itemizedPrompts[ix];
-        bulkops.push({
-            messageId: ix.toString(),
-            op: 'persist',
-            data: prompt
-        });
+        if (prompt) {
+            bulkops.push({
+                messageId: ix.toString(),
+                op: 'persist',
+                data: prompt
+            });
+        } else {
+            bulkops.push({
+                messageId: ix.toString(),
+                op: 'delete',
+            })
+        }
         await updateBulk(ctx.chatId, bulkops);
     }
 }
